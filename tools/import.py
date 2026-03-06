@@ -104,12 +104,14 @@ def import_mps(data_file:str="data/data.txt"):
                 search_result = search_Biz(mp_name, limit=1, offset=0)
                 mp_info=None
                 if search_result and 'list' in search_result and len(search_result['list']) > 0:
+                    items=[]
                     for item in search_result['list']:
                         print(item)
+                        items.append(item.get("nickname"))
                         if item.get("nickname") == mp_name:
                             mp_info = item
                     if mp_info is None:
-                        raise ValueError(f"未找到公众号信息: {mp_name}")
+                        raise ValueError(f"未找到公众号信息: {mp_name} 找到类似的结果但名称不完全匹配{items}")
                     # 提取公众号信息
                     mp_id = mp_info.get('fakeid', '')
                     mp_cover = mp_info.get('round_head_img', '')
