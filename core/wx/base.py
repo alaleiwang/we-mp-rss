@@ -77,9 +77,10 @@ class WxGather:
     def get_token(self):
         cfg.reload()
         wx_cfg.reload()
+        from driver.token import get as get_token_val
         self.Gather_Content=cfg.get('gather.content',False)
-        self.cookies = wx_cfg.get('cookie', '')
-        self.token=wx_cfg.get('token','')
+        self.cookies = get_token_val('cookie', '')
+        self.token=get_token_val('token','')
         # 随机选择一个 User-Agent
         self.user_agent = cfg.get('user_agent', '')
         user_agent = random.choice(USER_AGENTS)

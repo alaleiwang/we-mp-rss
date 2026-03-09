@@ -34,12 +34,12 @@ def set_token(data:any,ext_data:any=None):
     if ext_data is not None:
         token_data["ext_data"] = ext_data
 
-    # 优先存储到Redis
+    # 优先存储到Redis，整体存储
     if redis_client.is_connected:
         try:
-            for key, value in token_data.items():
-                redis_client._client.set(f"{REDIS_TOKEN_PREFIX}{key}", json.dumps(value) if isinstance(value, dict) else value)
+            redis_client._client.set(REDIS_TOKEN_PREFIX + "data", json.dumps(token_data))
             print_success("Token已存储到Redis")
+            _save_to_local(token_data)
         except Exception as e:
             print_warning(f"Redis存储失败，回退到本地文件: {e}")
             # 回退到本地文件存储
@@ -58,25 +58,31 @@ def set_token(data:any,ext_data:any=None):
 
 def _save_to_local(token_data: dict):
     """保存到本地文件"""
-    for key, value in token_data.items():
-        wx_cfg.set(key, value)
+    wx_cfg.set("token_data", token_data)
     wx_cfg.save_config()
     wx_cfg.reload()
 
 
 def get(key:str,default:str="")->str:
+    """从整体token_data中获取指定字段"""
+    token_data = _get_token_data()
+    if token_data is None:
+        return default
+    value = token_data.get(key, default)
+    if isinstance(value, dict):
+        return json.dumps(value)
+    return str(value) if value is not None else default
+
+
+def _get_token_data() -> dict | None:
+    """获取整体token_data"""
     # 优先从Redis获取
     if redis_client.is_connected:
         try:
-            value = redis_client._client.get(f"{REDIS_TOKEN_PREFIX}{key}")
+            value = redis_client._client.get(REDIS_TOKEN_PREFIX + "data")
             if value is not None:
-                # 尝试解析JSON，如果是简单字符串则直接返回
-                try:
-                    parsed = json.loads(value)
-                    return str(parsed) if not isinstance(parsed, dict) else json.dumps(parsed)
-                except (json.JSONDecodeError, TypeError):
-                    return str(value)
+                return json.loads(value)
         except Exception as e:
             print_warning(f"Redis读取失败，回退到本地文件: {e}")
     # 回退到本地文件
-    return str(wx_cfg.get(key, default))
+    return wx_cfg.get("token_data", None)
