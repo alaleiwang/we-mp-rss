@@ -10,6 +10,7 @@ class ArticleBase(Base):
     pic_url = Column(String(500))
     url=Column(String(500))
     description=Column(Text)
+    extinfo = Column(Text)
     status = Column(Integer,default=1)
     publish_time = Column(Integer,index=True)
     created_at = Column(DateTime)

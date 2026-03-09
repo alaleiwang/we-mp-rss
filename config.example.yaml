@@ -23,6 +23,12 @@ server:
 #需要注意数据库连接字符串的格式，如果是sqlite数据库，则使用sqlite:///路径的形式，如果是mysql数据库，
 #则使用mysql+pymysql://<username>:<password>@<host>/<database>?charset=<数据库编码>的形式
 db: ${DB:-sqlite:///data/db.db}
+#Redis 连接配置，用于缓存 Token 等数据，可选配置
+#格式: redis://[:password@]host:port/db 或 rediss://[:password@]host:port/db (SSL)
+#例如: redis://localhost:6379/0 或 redis://:password@redis.example.com:6379/1
+#留空则不使用 Redis
+redis:
+  url: ${REDIS_URL:-}
 #通知
 notice:
   #通知方式，可选dingding、wechat、feishu、custom
@@ -40,7 +46,7 @@ interval: ${SPAN_INTERVAL:- 10}
 webhook:
   #文章内容的发送格式(默认使用html格式，可选text、markdown)
   content_format: ${WEBHOOK.CONTENT_FORMAT:-html}
-  
+
 #API服务端口
 port: ${PORT:-8001}
 #调试模式
@@ -108,6 +114,16 @@ gather:
   clean_html: ${GATHER.CLEAN_HTML:-False}
   #浏览器类型 默认firefox 允许值 firefox/edge/webkit
   browser_type: ${BROWSER_TYPE:-firefox}
+
+#代理配置
+proxy:
+  #是否启用代理 默认False
+  enabled: ${PROXY_ENABLED:-False}
+  #Deno Deploy 代理地址，例如: https://your-proxy.deno.dev
+  #代理格式: {proxy_url}?url={target_url}
+  deno_url: ${PROXY_DENO_URL:-}
+  #HTTP代理地址，例如: http://127.0.0.1:7890 或 socks5://127.0.0.1:1080
+  http_url: ${PROXY_HTTP_URL:-}
 #安全配置
 safe:
     # 需要隐藏的配置信息，用逗号分隔 如：db,secret,token等 
@@ -140,21 +156,15 @@ export:
 site:
   name: ${SITE_NAME:-WeRss}
   description: ${SITE_DESCRIPTION:-A WeChat Official Account RSS Reader}
-  keywords: ${SITE_KEYWORDS:-}
+  keywords: ${SITE_KEYWORDS:-}WeChat,Official Account,RSS,Reader
 
-# 级联配置（支持父子节点架构）
 cascade:
-  # 是否启用级联模式
   enabled: ${CASCADE_ENABLED:-False}
-  # 节点类型: parent(父节点) 或 child(子节点)
-  node_type: ${CASCADE_NODE_TYPE:-parent}
-  # 父节点API地址 (子节点配置)
-  parent_api_url: ${CASCADE_PARENT_URL:-}
-  # 子节点API密钥 (子节点连接父节点使用)
+  node_type: ${CASCADE_NODE_TYPE:-child}
+  parent_api_url: ${CASCADE_PARENT_API_URL:-http://localhost:8001}
   api_key: ${CASCADE_API_KEY:-}
-  # 子节点密钥 (子节点连接父节点使用)
   api_secret: ${CASCADE_API_SECRET:-}
-  # 数据同步间隔 (秒) 默认300秒(5分钟)
   sync_interval: ${CASCADE_SYNC_INTERVAL:-300}
-  # 心跳间隔 (秒) 默认60秒
   heartbeat_interval: ${CASCADE_HEARTBEAT_INTERVAL:-60}
+  # 子节点任务拉取间隔（秒），默认30秒
+  task_poll_interval: ${CASCADE_TASK_POLL_INTERVAL:-30}

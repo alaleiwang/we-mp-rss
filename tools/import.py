@@ -50,13 +50,13 @@ def process_text_file(file_path: str) -> list:
         return []
 
 
-def import_mps(data_file:str="data/data.txt"):
+def import_mps(data_file:str="./data/data1.txt"):
     if not os.path.exists(data_file):
         print(f"错误: 未找到数据文件: {data_file}")
         print("请确保data目录下存在data.txt文件")
         sys.exit(1)
     
-    print(f"正在处理文件: data.txt")
+    print(f"正在处理文件: {data_file}")
     print("=" * 50)
     
     # 处理数据
@@ -111,7 +111,7 @@ def import_mps(data_file:str="data/data.txt"):
                         if item.get("nickname") == mp_name:
                             mp_info = item
                     if mp_info is None:
-                        raise ValueError(f"未找到公众号信息: {mp_name} 找到类似的结果但名称不完全匹配{items}")
+                        raise ValueError(f"类似的结果:{items}")
                     # 提取公众号信息
                     mp_id = mp_info.get('fakeid', '')
                     mp_cover = mp_info.get('round_head_img', '')
@@ -154,7 +154,7 @@ def import_mps(data_file:str="data/data.txt"):
                 error_count += 1
                 session.rollback()
                 if "frequencey control" in str(e):
-                    sleep(random.randint(5, 10))
+                    sleep(random.randint(30, 60))
         
         print("\n" + "=" * 50)
         print(f"导入完成: 成功 {success_count} 条，跳过 {skip_count} 条，失败 {error_count} 条")
@@ -162,7 +162,7 @@ def import_mps(data_file:str="data/data.txt"):
 
         # 保存失败列表到文件
         if failed_list:
-            failed_file = "data/failed_accounts.txt"
+            failed_file = f"{data_file.replace('.txt', '')}_failed.txt"
             with open(failed_file, 'w', encoding='utf-8') as f:
                 f.write("导入失败的账号列表\n")
                 f.write("=" * 50 + "\n")
@@ -175,7 +175,7 @@ def import_mps(data_file:str="data/data.txt"):
         print("未生成任何结果")
 
 if __name__ == '__main__':
-    data_file = "data/data.txt"
+    data_file = "./data/data1.txt"
     if len(sys.argv) > 1:
         data_file = sys.argv[1]
     import_mps(data_file)
