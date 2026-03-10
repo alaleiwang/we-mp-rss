@@ -7,8 +7,9 @@ def sys_notice(text:str="",title:str="",tag:str='系统通知',type=""):
     if len(webhook)>0:
         notice(webhook, title, markdown_text)
     feishu_webhook = notice_cfg.get('feishu', '')
+    feishu_secret = notice_cfg.get('feishu_secret', '')
     if len(feishu_webhook)>0:
-        notice(feishu_webhook, title, markdown_text)
+        notice(feishu_webhook, title, markdown_text, secret=feishu_secret if feishu_secret else None)
     wechat_webhook = notice_cfg.get('wechat', '')
     if len(wechat_webhook)>0:
         notice(wechat_webhook, title, markdown_text)
@@ -18,4 +19,3 @@ def sys_notice(text:str="",title:str="",tag:str='系统通知',type=""):
     bark_webhook = notice_cfg.get('bark', '')
     if len(bark_webhook)>0:
         notice(bark_webhook, title, markdown_text, notice_type='bark')
-

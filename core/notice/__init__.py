@@ -28,7 +28,7 @@ def _is_bark_url(webhook_url: str) -> bool:
     return False
 
 
-def notice( webhook_url, title, text,notice_type: str=None):
+def notice(webhook_url, title, text, notice_type: str=None, secret: str=None):
     """
     公用通知方法，根据类型判断调用哪种通知
     
@@ -37,6 +37,7 @@ def notice( webhook_url, title, text,notice_type: str=None):
     - webhook_url: 对应机器人的Webhook地址
     - title: 消息标题
     - text: 消息内容
+    - secret: 飞书机器人签名密钥（可选）
     """
     if len(str(webhook_url)) == 0:
         raise ValueError('未提供webhook_url')
@@ -60,7 +61,7 @@ def notice( webhook_url, title, text,notice_type: str=None):
     elif notice_type == 'dingtalk':
         send_dingtalk_message(webhook_url, title, text)
     elif notice_type == 'feishu':
-        send_feishu_message(webhook_url, title, text)
+        send_feishu_message(webhook_url, title, text, secret=secret)
     elif notice_type == 'bark':
         send_bark_message(webhook_url, title, text)
     elif notice_type == 'custom':
