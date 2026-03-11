@@ -6,12 +6,11 @@ services:
     image: we-mp-rss-backend:dev
     container_name: we-mp-rss-backend-dev
     restart: unless-stopped
+    env_file:
+      - ../.env
     environment:
       DB: sqlite:///data/we_mp_rss.db
-      USERNAME: admin
-      PASSWORD: admin@123
-      TZ: Asia/Shanghai
-      AUTO_RELOAD: "True"
+      PROXY_HTTP_URL: http://singbox:7890
     ports:
       - "8001:8001"
     volumes:
@@ -30,6 +29,23 @@ services:
       - ../data_sync.py:/app/data_sync.py
       - ../job.py:/app/job.py
       - ../data:/app/data
+    depends_on:
+      - singbox
+
+  singbox:
+    image: ghcr.io/sagernet/sing-box:latest
+    container_name: we-mp-rss-singbox-dev
+    restart: unless-stopped
+    env_file:
+      - ../.env
+    environment:
+      SINGBOX_INBOUND_PORT: 7890
+      SINGBOX_LOG_LEVEL: info
+    entrypoint:
+      - /bin/sh
+      - /etc/sing-box/run-singbox.sh
+    volumes:
+      - ./singbox/run-singbox.sh:/etc/sing-box/run-singbox.sh:ro
 
   frontend:
     build:

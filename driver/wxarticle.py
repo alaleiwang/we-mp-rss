@@ -26,6 +26,9 @@ class WXArticleFetcher:
         """初始化文章获取器"""
         self.wait_timeout = wait_timeout
         self.controller = PlaywrightController()
+        self.browser_proxy_url = ""
+        if cfg.get("proxy.enabled", False):
+            self.browser_proxy_url = cfg.get("proxy.http_url", "")
         if not self.controller:
             raise Exception("WebDriver未初始化或未登录")
     
@@ -256,7 +259,7 @@ class WXArticleFetcher:
                 }
             }
         try:
-            self.controller.start_browser()
+            self.controller.start_browser(proxy_url=self.browser_proxy_url)
         
             self.page = self.controller.page
             if cfg.get("proxy.deno_url","")!="" and cfg.get("proxy.enabled",False):

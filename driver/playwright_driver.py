@@ -8,6 +8,7 @@ import random
 import uuid
 import asyncio
 from socket import timeout
+from urllib.parse import urlparse, unquote
 
 from core.print import print_error
 
@@ -28,6 +29,37 @@ class PlaywrightController:
         self.context = None
         self.page = None
         self.isClose = True
+
+    def _mask_proxy_url(self, proxy_url: str) -> str:
+        if not proxy_url:
+            return ""
+        parsed = urlparse(proxy_url)
+        if parsed.username or parsed.password:
+            netloc = parsed.hostname or ""
+            if parsed.port:
+                netloc = f"{netloc}:{parsed.port}"
+            return f"{parsed.scheme}://***:***@{netloc}"
+        return proxy_url
+
+    def _build_proxy_options(self, proxy_url: str):
+        if not proxy_url:
+            return None
+
+        parsed = urlparse(proxy_url)
+        if not parsed.scheme or not parsed.hostname:
+            raise ValueError(f"代理地址格式无效: {proxy_url}")
+
+        server = f"{parsed.scheme}://{parsed.hostname}"
+        if parsed.port:
+            server = f"{server}:{parsed.port}"
+
+        proxy_options = {"server": server}
+        if parsed.username:
+            proxy_options["username"] = unquote(parsed.username)
+        if parsed.password:
+            proxy_options["password"] = unquote(parsed.password)
+        return proxy_options
+
     def _is_browser_installed(self, browser_name):
         """检查指定浏览器是否已安装"""
         try:
@@ -59,7 +91,7 @@ class PlaywrightController:
                 self.browser is not None and 
                 self.context is not None and 
                 self.page is not None)
-    def start_browser(self, headless=True, mobile_mode=False, dis_image=True, browser_name=browsers_name, language="zh-CN", anti_crawler=True):
+    def start_browser(self, headless=True, mobile_mode=False, dis_image=True, browser_name=browsers_name, language="zh-CN", anti_crawler=True, proxy_url=""):
         try:
             # 使用线程锁确保线程安全
             if  str(os.getenv("NOT_HEADLESS",False))=="True":
@@ -88,6 +120,11 @@ class PlaywrightController:
             launch_options = {
                 "headless": headless
             }
+
+            proxy_options = self._build_proxy_options(proxy_url)
+            if proxy_options:
+                print(f"浏览器代理已启用: {self._mask_proxy_url(proxy_url)}")
+                launch_options["proxy"] = proxy_options
             
             # 在Windows上添加额外的启动选项
             if self.system == "windows":
