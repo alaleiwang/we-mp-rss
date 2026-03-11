@@ -14,10 +14,11 @@ class ArticleBase(Base):
     status = Column(Integer,default=1)
     publish_time = Column(Integer,index=True)
     created_at = Column(DateTime)
-    updated_at = Column(BigInteger)  
-    updated_at_millis = Column(BigInteger,index=True)  
+    updated_at = Column(BigInteger)
+    updated_at_millis = Column(BigInteger,index=True)
     is_export = Column(Integer)
     is_read = Column(Integer, default=0)
+    is_favorite = Column(Integer, default=0)
 class Article(ArticleBase):
     content = Column(Text)
     content_html = Column(Text)
@@ -38,5 +39,6 @@ class Article(ArticleBase):
             'created_at': self.created_at.isoformat() if self.created_at and hasattr(self.created_at, "isoformat") else self.created_at,
             'updated_at': self.updated_at.isoformat() if self.updated_at and hasattr(self.updated_at, "isoformat") else self.updated_at,
             'is_export': self.is_export,
-            'is_read': self.is_read
+            'is_read': self.is_read,
+            'is_favorite': self.is_favorite
         }

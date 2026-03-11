@@ -4,7 +4,7 @@ import { Message } from '@arco-design/web-vue'
 import router from '@/router'
 // 创建axios实例
 const http = axios.create({
-  baseURL: (import.meta.env.VITE_API_BASE_URL || '') + 'api/v1/',
+  baseURL: '/api/v1/',
   timeout: 100000,
   headers: {
     'Content-Type': 'application/json',

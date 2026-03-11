@@ -22,6 +22,7 @@ export interface Article {
   link: string
   created_at: string
   is_read?: number
+  is_favorite?: number
 }
 
 /**
@@ -40,6 +41,7 @@ export interface ArticleListParams {
   search?: string
   status?: number
   mp_id?: string
+  only_favorite?: boolean
 }
 
 /**
@@ -64,10 +66,11 @@ export const getArticles = (params: ArticleListParams) => {
     limit: params.pageSize || 10,
     search: params.search,
     status: params.status,
-    mp_id: params.mp_id
+    mp_id: params.mp_id,
+    only_favorite: params.only_favorite
   }
-  return http.get<ArticleListResult>('/wx/articles', { 
-    params: apiParams 
+  return http.get<ArticleListResult>('/wx/articles', {
+    params: apiParams
   })
 }
 
@@ -162,6 +165,18 @@ export const ClearDuplicateArticle = (id?: number | string) => {
 export const toggleArticleReadStatus = (id: number | string, is_read: boolean) => {
   return http.put<{code: number, message: string, is_read: boolean}>(`/wx/articles/${id}/read`, null, {
     params: { is_read }
+  })
+}
+
+/**
+ * 切换文章收藏状态
+ * @param id 文章ID
+ * @param is_favorite 收藏状态
+ * @returns 操作结果
+ */
+export const toggleArticleFavoriteStatus = (id: number | string, is_favorite: boolean) => {
+  return http.put<{code: number, message: string, is_favorite: boolean}>(`/wx/articles/${id}/favorite`, null, {
+    params: { is_favorite }
   })
 }
 
