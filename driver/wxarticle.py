@@ -252,6 +252,7 @@ class WXArticleFetcher:
                 "publish_time": "",
                 "content": "",
                 "images": "",
+                "fetch_error": "",
                 "mp_info":{
                 "mp_name":"",   
                 "logo":"",
@@ -364,6 +365,7 @@ class WXArticleFetcher:
             info["topic_image"]=topic_image
 
         except Exception as e:
+            info["fetch_error"] = str(e)
             print_error(f"文章内容获取失败: {str(e)}")
             body_preview = body[:50] if 'body' in dir() else "N/A"
             print_warning(f"页面内容预览: {body_preview}...")

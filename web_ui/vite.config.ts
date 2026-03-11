@@ -5,6 +5,7 @@ import { fileURLToPath, URL } from "node:url";
 export default defineConfig(({ command, mode }) => {
   // 加载环境变量
   const env = loadEnv(mode, process.cwd(), "");
+  const apiTarget = env.VITE_PROXY_TARGET || env.VITE_API_BASE_URL || "http://backend:8001/";
 
   return {
     plugins: [vue()],
@@ -33,27 +34,27 @@ export default defineConfig(({ command, mode }) => {
       port: 3000,
       proxy: {
         "/views": {
-          target: env.VITE_API_BASE_URL,
+          target: apiTarget,
           changeOrigin: true,
         },
         "/static": {
-          target: env.VITE_API_BASE_URL,
+          target: apiTarget,
           changeOrigin: true,
         },
         "/files": {
-          target: env.VITE_API_BASE_URL,
+          target: apiTarget,
           changeOrigin: true,
         },
         "/rss": {
-          target: env.VITE_API_BASE_URL,
+          target: apiTarget,
           changeOrigin: true,
         },
         "/feed": {
-          target: env.VITE_API_BASE_URL,
+          target: apiTarget,
           changeOrigin: true,
         },
         "/api": {
-          target: env.VITE_API_BASE_URL,
+          target: apiTarget,
           changeOrigin: true,
         },
       },

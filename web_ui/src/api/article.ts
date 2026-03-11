@@ -13,7 +13,7 @@ import http from './http'
  * @property is_read 阅读状态
  */
 export interface Article {
-  id: number
+  id: number | string
   title: string
   content: string
   mp_name: string
@@ -22,6 +22,7 @@ export interface Article {
   link: string
   created_at: string
   is_read?: number
+  is_favorite?: number
 }
 
 /**
@@ -33,11 +34,14 @@ export interface Article {
  * @property mp_id 公众号ID
  */
 export interface ArticleListParams {
+  page?: number
+  pageSize?: number
   offset?: number
   limit?: number
   search?: string
   status?: number
   mp_id?: string
+  only_favorite?: boolean
 }
 
 /**
@@ -62,10 +66,11 @@ export const getArticles = (params: ArticleListParams) => {
     limit: params.pageSize || 10,
     search: params.search,
     status: params.status,
-    mp_id: params.mp_id
+    mp_id: params.mp_id,
+    only_favorite: params.only_favorite
   }
-  return http.get<ArticleListResult>('/wx/articles', { 
-    params: apiParams 
+  return http.get<ArticleListResult>('/wx/articles', {
+    params: apiParams
   })
 }
 
@@ -75,7 +80,7 @@ export const getArticles = (params: ArticleListParams) => {
  * @parama 类型 0当前,-1上一篇,1下一篇
  * @returns 文章详情结果
  */
-export const getArticleDetail = (id: number,action_type:number) => {
+export const getArticleDetail = (id: number | string, action_type: number = 0) => {
   switch(action_type){
     case -1:
       return http.get<{code: number, data: Article}>(`/wx/articles/${id}/prev`)
@@ -93,7 +98,7 @@ export const getArticleDetail = (id: number,action_type:number) => {
  * @param id 当前文章ID
  * @returns 上一篇文章详情结果
  */
-export const getPrevArticleDetail = (id: number) => {
+export const getPrevArticleDetail = (id: number | string) => {
   return http.get<{code: number, data: Article}>(`/wx/articles/${id}/prev`)
 }
 
@@ -102,7 +107,7 @@ export const getPrevArticleDetail = (id: number) => {
  * @param id 当前文章ID
  * @returns 下一篇文章详情结果
  */
-export const getNextArticleDetail = (id: number) => {
+export const getNextArticleDetail = (id: number | string) => {
   return http.get<{code: number, data: Article}>(`/wx/articles/${id}/next`)
 }
 
@@ -111,8 +116,26 @@ export const getNextArticleDetail = (id: number) => {
  * @param id 文章ID
  * @returns 删除结果
  */
-export const deleteArticle = (id: number) => {
+export const deleteArticle = (id: number | string) => {
   return http.delete<{code: number, message: string}>(`/wx/articles/${id}`)
+}
+
+/**
+ * 刷新单篇文章内容
+ * @param id 文章ID
+ * @returns 任务信息
+ */
+export const refreshArticle = (id: number | string) => {
+  return http.post<{code: number, message: string}>(`/wx/articles/${id}/refresh`)
+}
+
+/**
+ * 查询单篇文章刷新任务状态
+ * @param taskId 任务ID
+ * @returns 任务状态
+ */
+export const getRefreshArticleTaskStatus = (taskId: string) => {
+  return http.get<{code: number, data: any}>(`/wx/articles/refresh/tasks/${taskId}`)
 }
 
 /**
@@ -120,7 +143,7 @@ export const deleteArticle = (id: number) => {
  * @param id 无实际作用（保留参数）
  * @returns 清空结果
  */
-export const ClearArticle = (id: number) => {
+export const ClearArticle = (id?: number | string) => {
   return http.delete<{code: number, message: string}>(`/wx/articles/clean`)
 }
 
@@ -129,7 +152,7 @@ export const ClearArticle = (id: number) => {
  * @param id 无实际作用（保留参数）
  * @returns 清空结果
  */
-export const ClearDuplicateArticle = (id: number) => {
+export const ClearDuplicateArticle = (id?: number | string) => {
   return http.delete<{code: number, message: string}>(`/wx/articles/clean_duplicate_articles`)
 }
 
@@ -139,9 +162,21 @@ export const ClearDuplicateArticle = (id: number) => {
  * @param is_read 阅读状态
  * @returns 操作结果
  */
-export const toggleArticleReadStatus = (id: number, is_read: boolean) => {
+export const toggleArticleReadStatus = (id: number | string, is_read: boolean) => {
   return http.put<{code: number, message: string, is_read: boolean}>(`/wx/articles/${id}/read`, null, {
     params: { is_read }
+  })
+}
+
+/**
+ * 切换文章收藏状态
+ * @param id 文章ID
+ * @param is_favorite 收藏状态
+ * @returns 操作结果
+ */
+export const toggleArticleFavoriteStatus = (id: number | string, is_favorite: boolean) => {
+  return http.put<{code: number, message: string, is_favorite: boolean}>(`/wx/articles/${id}/favorite`, null, {
+    params: { is_favorite }
   })
 }
 

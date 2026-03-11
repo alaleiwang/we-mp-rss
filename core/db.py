@@ -1,4 +1,4 @@
-from sqlalchemy import create_engine, Engine,Text,event
+from sqlalchemy import create_engine, Engine,Text,event, inspect, text
 from sqlalchemy.orm import sessionmaker, declarative_base,scoped_session
 from sqlalchemy import Column, Integer, String, DateTime
 from typing import Optional, List
@@ -51,9 +51,32 @@ class Db:
                                      connect_args={"check_same_thread": False} if con_str.startswith('sqlite:///') else {}
                                      )
             self.session_factory=self.get_session_factory()
+            self.ensure_article_columns()
         except Exception as e:
             print(f"Error creating database connection: {e}")
             raise
+    def ensure_article_columns(self):
+        """Ensure required columns exist for legacy articles tables."""
+        try:
+            inspector = inspect(self.engine)
+            if "articles" not in inspector.get_table_names():
+                return
+
+            columns = {column["name"] for column in inspector.get_columns("articles")}
+            alter_statements = []
+            if "is_favorite" not in columns:
+                alter_statements.append("ALTER TABLE articles ADD COLUMN is_favorite INTEGER DEFAULT 0")
+
+            if not alter_statements:
+                return
+
+            with self.engine.begin() as conn:
+                for stmt in alter_statements:
+                    conn.execute(text(stmt))
+
+            print_info(f"[{self.tag}] 文章表结构已自动更新: {', '.join(alter_statements)}")
+        except Exception as e:
+            print_warning(f"[{self.tag}] 检查/更新 articles 表结构失败: {e}")
     def create_tables(self):
         """Create all tables defined in models"""
         from core.models.base import Base as B # 导入所有模型

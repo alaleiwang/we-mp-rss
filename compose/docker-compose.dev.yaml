@@ -55,7 +55,8 @@ services:
     container_name: we-mp-rss-frontend-dev
     restart: unless-stopped
     environment:
-      VITE_API_BASE_URL: http://backend:8001/
+      VITE_API_BASE_URL: /
+      VITE_PROXY_TARGET: http://backend:8001/
     depends_on:
       - backend
     ports:

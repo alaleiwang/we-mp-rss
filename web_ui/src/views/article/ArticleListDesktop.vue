@@ -15,6 +15,7 @@
               </a-button>
               <template #content>
                 <a-doption @click="showAddModal"><template #icon><icon-plus /></template>添加公众号</a-doption>
+                <a-doption @click="showAddFeaturedArticleModal"><template #icon><icon-link /></template>添加精选文章</a-doption>
                 <a-doption @click="exportMPS"><template #icon><icon-export /></template>导出公众号</a-doption>
                 <a-doption @click="importMPS"><template #icon><icon-import /></template>导入公众号</a-doption>
                 <a-doption @click="exportOPML"><template #icon><icon-share-external /></template>导出OPML</a-doption>
@@ -47,15 +48,15 @@
                     <a-typography-text strong style="line-height:32px;" :style="{ opacity: item.status === 0 ? 0.5 : 1 }">
                       {{ item.name || item.mp_name }}
                     </a-typography-text>
-                    <a-button v-if="activeMpId === item.id && item.id != ''" size="mini" type="text" status="danger"
+                    <a-button v-if="activeMpId === item.id && canManageMp(item.id)" size="mini" type="text" status="danger"
                       @click="$event.stopPropagation(); deleteMp(item.id)">
                       <template #icon><icon-delete /></template>
                     </a-button>
-                    <a-button v-if="activeMpId === item.id && item.id != ''" size="mini" type="text"
+                    <a-button v-if="activeMpId === item.id && canManageMp(item.id)" size="mini" type="text"
                       @click="$event.stopPropagation(); copyMpId(item.id)">
                       <template #icon><icon-copy /></template>
                     </a-button>
-                    <a-button v-if="activeMpId === item.id && item.id != ''" size="mini" type="text"
+                    <a-button v-if="activeMpId === item.id && canManageMp(item.id)" size="mini" type="text"
                       @click="$event.stopPropagation(); toggleMpStatus(item.id, item.status === 1 ? 0 : 1)">
                       <template #icon>
                         <icon-stop v-if="item.status === 1" />
@@ -88,7 +89,7 @@
                 导出
               </a-button>
               <ExportModal ref="exportModal"  />
-              <a-button @click="refresh" v-if="activeFeed?.id != ''">
+              <a-button @click="refresh" v-if="activeFeed?.id != '' && activeFeed?.id !== FEATURED_MP_ID">
                 <template #icon><icon-refresh /></template>
                 刷新
               </a-button>
@@ -150,8 +151,9 @@
         <a-card style="border:0">
           <a-alert type="success" closable>{{ activeFeed?.mp_intro || "请选择一个公众号码进行管理,搜索文章后再点击订阅会有惊喜哟！！！" }}</a-alert>
           <div class="search-bar">
-            <a-input-search v-model="searchText" placeholder="搜索文章标题" @search="handleSearch" @keyup.enter="handleSearch"
+            <a-input-search class="search-input" v-model="searchText" placeholder="搜索文章标题" @search="handleSearch" @keyup.enter="handleSearch"
               allow-clear />
+            <a-checkbox class="favorite-filter" :model-value="onlyFavorite" @change="handleFavoriteFilterChange">仅显示已收藏</a-checkbox>
           </div>
           <a-table :columns="columns" :data="articles" :loading="loading" :pagination="pagination" :row-selection="{
             type: 'checkbox',
@@ -170,6 +172,19 @@
               <a-space>
                 <a-button type="text" @click="viewArticle(record)" :title="record.id">
                   <template #icon><icon-eye /></template>
+                </a-button>
+                <a-button type="text" @click="toggleFavoriteStatus(record)" :title="record.is_favorite === 1 ? '取消收藏' : '收藏'">
+                  <template #icon>
+                    <icon-star-fill v-if="record.is_favorite === 1" />
+                    <icon-star v-else />
+                  </template>
+                </a-button>
+                <a-button
+                  type="text"
+                  :loading="refreshingArticleIds.includes(String(record.id))"
+                  @click="refreshSingleArticle(record)"
+                >
+                  <template #icon><icon-refresh /></template>
                 </a-button>
                 <a-button type="text" status="danger" @click="deleteArticle(record.id)">
                   <template #icon><icon-delete /></template>
@@ -193,7 +208,25 @@
               <a-button type="primary" @click="handleRefresh">确定</a-button>
             </template>
           </a-modal>
-          <a-modal id="article-model" v-model:visible="articleModalVisible" 
+          <a-modal v-model:visible="featuredArticleModalVisible" title="添加精选文章">
+            <a-form>
+              <a-form-item label="文章链接">
+                <div class="featured-url-input-wrapper">
+                  <a-input
+                    v-model="featuredArticleUrl"
+                    placeholder="请输入微信公众号文章链接"
+                    allow-clear
+                  />
+                  <div class="featured-url-example">eg：https://mp.weixin.qq.com/s/xxxxx</div>
+                </div>
+              </a-form-item>
+            </a-form>
+            <template #footer>
+              <a-button @click="featuredArticleModalVisible = false">取消</a-button>
+              <a-button type="primary" @click="handleAddFeaturedArticle">添加</a-button>
+            </template>
+          </a-modal>
+          <a-modal id="article-model" v-model:visible="articleModalVisible"
             placement="left" :footer="false" :fullscreen="false" @before-close="resetScrollPosition">
             <h2 id="topreader">{{ currentArticle.title }}</h2>
             <div style="margin-top: 20px; color: var(--color-text-3); text-align: left">
@@ -220,11 +253,11 @@ import { Avatar } from '@/utils/constants'
 import { translatePage, setCurrentLanguage } from '@/utils/translate';
 import { ref, onMounted, h, nextTick, watch, computed } from 'vue'
 import axios from 'axios'
-import { IconApps, IconAtt, IconDelete, IconEdit, IconEye, IconRefresh, IconScan, IconWeiboCircleFill, IconWifi, IconCode, IconCheck, IconClose, IconStop, IconPlayArrow, IconCopy, IconPlus, IconDown, IconExport, IconImport, IconShareExternal } from '@arco-design/web-vue/es/icon'
-import { getArticles, deleteArticle as deleteArticleApi, ClearArticle, ClearDuplicateArticle, getArticleDetail, toggleArticleReadStatus } from '@/api/article'
+import { IconApps, IconAtt, IconDelete, IconEdit, IconEye, IconRefresh, IconScan, IconWeiboCircleFill, IconWifi, IconCode, IconCheck, IconClose, IconStop, IconPlayArrow, IconCopy, IconPlus, IconDown, IconExport, IconImport, IconShareExternal, IconStar, IconStarFill, IconLink } from '@arco-design/web-vue/es/icon'
+import { getArticles, deleteArticle as deleteArticleApi, ClearArticle, ClearDuplicateArticle, getArticleDetail, getRefreshArticleTaskStatus, refreshArticle as refreshArticleApi, toggleArticleFavoriteStatus, toggleArticleReadStatus } from '@/api/article'
 import { ExportOPML, ExportMPS, ImportMPS } from '@/api/export'
 import ExportModal from '@/components/ExportModal.vue'
-import { getSubscriptions, UpdateMps, toggleMpStatus as toggleMpStatusApi } from '@/api/subscription'
+import { addFeaturedArticle, getFeaturedArticleTaskStatus, getSubscriptions, UpdateMps, toggleMpStatus as toggleMpStatusApi } from '@/api/subscription'
 import { inject } from 'vue'
 import { Message, Modal } from '@arco-design/web-vue'
 import { formatDateTime, formatTimestamp } from '@/utils/date'
@@ -234,6 +267,8 @@ import TextIcon from '@/components/TextIcon.vue'
 import { ProxyImage } from '@/utils/constants'
 
 const articles = ref([])
+const FEATURED_MP_ID = 'MP_WXS_FEATURED_ARTICLES'
+const FEATURED_MP_NAME = '精选文章'
 const loading = ref(false)
 const mpList = ref([])
 const mpLoading = ref(false)
@@ -253,6 +288,9 @@ const mpFilterType = ref('active') // 'active' | 'disabled' | 'all'
 const searchText = ref('')
 const filterStatus = ref('')
 const mpSearchText = ref('')
+const onlyFavorite = ref(false)
+const featuredArticleModalVisible = ref(false)
+const featuredArticleUrl = ref('')
 
 const pagination = ref({
   current: 1,
@@ -358,6 +396,8 @@ const columns = [
   {
     title: '操作',
     dataIndex: 'actions',
+    width: 180,
+    align: 'center',
     slotName: 'actions'
   }
 ]
@@ -377,6 +417,58 @@ const activeFeed = ref({
   id: "",
   name: "全部",
 })
+const canManageMp = (mpId: string) => mpId !== '' && mpId !== FEATURED_MP_ID
+
+const showAddFeaturedArticleModal = () => {
+  featuredArticleUrl.value = ''
+  featuredArticleModalVisible.value = true
+}
+
+const handleAddFeaturedArticle = async () => {
+  const url = featuredArticleUrl.value.trim()
+  if (!url) {
+    Message.warning('请输入文章链接')
+    return
+  }
+  if (!url.includes('mp.weixin.qq.com/s/')) {
+    Message.warning('请输入有效的公众号文章链接')
+    return
+  }
+
+  try {
+    const res = await addFeaturedArticle({ url })
+    const taskId = res?.task_id
+    Message.success(res?.message || '已开始添加/抓取，请稍后刷新查看结果')
+    featuredArticleModalVisible.value = false
+    if (!taskId) {
+      return
+    }
+
+    for (let i = 0; i < 15; i++) {
+      await new Promise((resolve) => setTimeout(resolve, 2000))
+      try {
+        const task = await getFeaturedArticleTaskStatus(taskId)
+        if (task?.status === 'success') {
+          Message.success(task?.message || '精选文章添加成功')
+          await fetchMpList()
+          handleMpClick(FEATURED_MP_ID)
+          return
+        }
+        if (task?.status === 'failed') {
+          Message.error(task?.message || '添加精选文章失败')
+          return
+        }
+      } catch (error) {
+        console.error('查询精选文章任务失败:', error)
+      }
+    }
+
+    Message.info('导入任务仍在执行，请稍后手动刷新查看结果')
+  } catch (error) {
+    Message.error(String(error || '添加精选文章失败'))
+  }
+}
+
 const handleMpClick = (mpId: string) => {
   activeMpId.value = mpId
   pagination.value.current = 1
@@ -394,7 +486,8 @@ const fetchArticles = async () => {
       pageSize: pagination.value.pageSize,
       search: searchText.value,
       status: filterStatus.value,
-      mp_id: activeMpId.value
+      mp_id: activeMpId.value,
+      only_favorite: onlyFavorite.value
     })
 
     const res = await getArticles({
@@ -402,7 +495,8 @@ const fetchArticles = async () => {
       pageSize: pagination.value.pageSize,
       search: searchText.value,
       status: filterStatus.value,
-      mp_id: activeMpId.value
+      mp_id: activeMpId.value,
+      only_favorite: onlyFavorite.value
     })
 
     // 确保数据包含必要字段
@@ -410,7 +504,8 @@ const fetchArticles = async () => {
       ...item,
       mp_name: item.mp_name || item.account_name || '未知公众号',
       publish_time: item.publish_time || item.create_time || '-',
-      url: item.url || "https://mp.weixin.qq.com/s/" + item.id
+      url: item.url || "https://mp.weixin.qq.com/s/" + item.id,
+      is_favorite: item.is_favorite === 1 ? 1 : 0
     }))
     pagination.value.total = res.total || 0
   } catch (error) {
@@ -443,7 +538,6 @@ const initIssourceUrl = () => {
 }
 
 // 监听 issourceUrl 变化并保存到 localStorage
-import { watch } from 'vue'
 watch(issourceUrl, (newValue) => {
   localStorage.setItem('issourceUrl', newValue.toString())
 }, { immediate: false })
@@ -461,6 +555,12 @@ const handlePageSizeChange = (pageSize: number) => {
 }
 
 const handleSearch = () => {
+  pagination.value.current = 1
+  fetchArticles()
+}
+
+const handleFavoriteFilterChange = (value: boolean | (string | number | boolean)[]) => {
+  onlyFavorite.value = Array.isArray(value) ? value.length > 0 : Boolean(value)
   pagination.value.current = 1
   fetchArticles()
 }
@@ -616,7 +716,7 @@ const handleAddSuccess = () => {
  const processedContent = (record: any) => {
  return ProxyImage(record.content)
  }
-const viewArticle = async (record: any,action_type: number) => {
+const viewArticle = async (record: any, action_type: number = 0) => {
   loading.value = true
   try {
     // console.log(record)
@@ -654,6 +754,7 @@ const currentArticle = ref({
 })
 const articleModalVisible = ref(false)
 const shadowContainer = ref()
+const refreshingArticleIds = ref<string[]>([])
 
 const deleteArticle = (id: number) => {
   Modal.confirm({
@@ -670,6 +771,50 @@ const deleteArticle = (id: number) => {
       Message.info('已取消删除操作');
     }
   });
+}
+
+const pollRefreshArticleTask = async (taskId: string) => {
+  for (let i = 0; i < 15; i++) {
+    await new Promise((resolve) => setTimeout(resolve, 2000))
+    try {
+      const task = await getRefreshArticleTaskStatus(taskId)
+      if (task?.status === 'success') {
+        Message.success(task?.message || '文章刷新成功')
+        await fetchArticles()
+        return
+      }
+      if (task?.status === 'failed') {
+        Message.error(task?.message || '文章刷新失败')
+        return
+      }
+    } catch (error) {
+      console.error('查询文章刷新任务失败:', error)
+    }
+  }
+
+  Message.info('刷新任务仍在执行，请稍后手动刷新列表查看结果')
+}
+
+const refreshSingleArticle = async (record: any) => {
+  const articleId = String(record.id)
+  if (refreshingArticleIds.value.includes(articleId)) {
+    return
+  }
+
+  refreshingArticleIds.value = [...refreshingArticleIds.value, articleId]
+  try {
+    const res = await refreshArticleApi(record.id)
+    const taskId = res?.task_id
+    Message.success(res?.message || '已开始刷新，请稍后查看')
+    if (taskId) {
+      await pollRefreshArticleTask(taskId)
+    }
+  } catch (error) {
+    console.error('刷新文章失败:', error)
+    Message.error(String(error || '刷新文章失败'))
+  } finally {
+    refreshingArticleIds.value = refreshingArticleIds.value.filter((id) => id !== articleId)
+  }
 }
 
 const handleBatchDelete = () => {
@@ -775,6 +920,9 @@ const copyMpId = async (mpId: string) => {
 }
 
 const deleteMp = async (mpId: string) => {
+  if (!canManageMp(mpId)) {
+    return
+  }
   try {
     Modal.confirm({
       title: '确认删除',
@@ -797,6 +945,9 @@ const deleteMp = async (mpId: string) => {
 }
 
 const toggleMpStatus = async (mpId: string, newStatus: number) => {
+  if (!canManageMp(mpId)) {
+    return
+  }
   try {
     await toggleMpStatusApi(mpId, newStatus);
     Message.success(newStatus === 0 ? '公众号已禁用' : '公众号已启用');
@@ -921,6 +1072,28 @@ const toggleReadStatus = async (record: any) => {
     Message.error('更新阅读状态失败');
   }
 };
+
+const toggleFavoriteStatus = async (record: any) => {
+  try {
+    const newFavoriteStatus = record.is_favorite === 1 ? false : true
+    await toggleArticleFavoriteStatus(record.id, newFavoriteStatus)
+
+    const index = articles.value.findIndex(item => item.id === record.id)
+    if (index !== -1) {
+      articles.value[index].is_favorite = newFavoriteStatus ? 1 : 0
+    }
+
+    Message.success(newFavoriteStatus ? '收藏成功' : '已取消收藏')
+
+    if (onlyFavorite.value && !newFavoriteStatus) {
+      pagination.value.current = 1
+      fetchArticles()
+    }
+  } catch (error) {
+    console.error('更新收藏状态失败:', error)
+    Message.error('更新收藏状态失败')
+  }
+}
 </script>
 
 <style scoped>
@@ -949,7 +1122,34 @@ const toggleReadStatus = async (record: any) => {
 
 .search-bar {
   display: flex;
+  align-items: center;
+  gap: 12px;
   margin-bottom: 20px;
+}
+
+.search-input {
+  flex: 1;
+  min-width: 0;
+  max-width: calc(100% - 140px);
+}
+
+.favorite-filter {
+  flex: 0 0 auto;
+  white-space: nowrap;
+}
+
+.featured-url-example {
+  margin-top: 8px;
+  color: var(--color-text-3);
+  font-size: 12px;
+}
+
+.featured-url-input-wrapper {
+  width: 100%;
+}
+
+:deep(.arco-table-th-item) {
+  justify-content: center;
 }
 
 .arco-drawer-body img {

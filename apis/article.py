@@ -1,3 +1,7 @@
+import threading
+import time
+from uuid import uuid4
+
 from fastapi import APIRouter, Depends, HTTPException, status as fast_status, Query
 from core.auth import get_current_user_or_ak
 from core.db import DB
@@ -10,7 +14,117 @@ from apis.base import format_search_kw
 from core.print import print_warning, print_info, print_error, print_success
 from core.cache import clear_cache_pattern
 from tools.fix import fix_article
+from driver.wxarticle import WXArticleFetcher
 router = APIRouter(prefix=f"/articles", tags=["文章管理"])
+
+_refresh_tasks = {}
+_refresh_tasks_lock = threading.Lock()
+
+
+def _set_refresh_task(task_id: str, data: dict):
+    with _refresh_tasks_lock:
+        _refresh_tasks[task_id] = data
+
+
+def _get_active_refresh_task(article_id: str):
+    with _refresh_tasks_lock:
+        for task in _refresh_tasks.values():
+            if task.get("article_id") != article_id:
+                continue
+            if task.get("status") in {"pending", "running"}:
+                return dict(task)
+    return None
+
+
+def _run_refresh_article_task(task_id: str, article_id: str):
+    session = DB.get_session()
+    fetcher = None
+    try:
+        _set_refresh_task(task_id, {
+            "task_id": task_id,
+            "article_id": article_id,
+            "status": "running",
+            "message": "任务执行中"
+        })
+
+        article = session.query(Article).filter(Article.id == article_id).first()
+        if not article:
+            _set_refresh_task(task_id, {
+                "task_id": task_id,
+                "article_id": article_id,
+                "status": "failed",
+                "message": "文章不存在"
+            })
+            return
+
+        target_url = (article.url or "").strip()
+        if not target_url:
+            _set_refresh_task(task_id, {
+                "task_id": task_id,
+                "article_id": article_id,
+                "status": "failed",
+                "message": "文章缺少可抓取链接"
+            })
+            return
+
+        fetcher = WXArticleFetcher()
+        fetched = fetcher.get_article_content(target_url)
+        fetched_content = fetched.get("content")
+
+        if fetched_content != "DELETED" and not fetched_content:
+            fetch_error = fetched.get("fetch_error") or "文章内容抓取为空"
+            _set_refresh_task(task_id, {
+                "task_id": task_id,
+                "article_id": article_id,
+                "status": "failed",
+                "message": f"文章刷新失败: {fetch_error}"
+            })
+            return
+
+        article.title = fetched.get("title") or article.title
+        article.url = target_url
+        article.publish_time = fetched.get("publish_time") or article.publish_time
+        article.content = fetched_content if fetched_content is not None else article.content
+        if fetched_content == "DELETED":
+            article.description = fetched.get("description") or article.description
+        else:
+            article.description = fetched.get("description") or fetcher.get_description(article.content or "")
+        article.pic_url = fetched.get("topic_image") or fetched.get("pic_url") or article.pic_url
+        article.status = DATA_STATUS.DELETED if fetched_content == "DELETED" else DATA_STATUS.ACTIVE
+
+        now_seconds = int(time.time())
+        now_millis = int(time.time() * 1000)
+        article.updated_at = now_seconds
+        article.updated_at_millis = now_millis
+        session.commit()
+
+        clear_cache_pattern("articles_list")
+        clear_cache_pattern("article_detail")
+        clear_cache_pattern("home_page")
+        clear_cache_pattern("tag_detail")
+
+        _set_refresh_task(task_id, {
+            "task_id": task_id,
+            "article_id": article_id,
+            "status": "success",
+            "message": "文章刷新成功",
+            "updated_at": now_seconds
+        })
+    except Exception as e:
+        session.rollback()
+        _set_refresh_task(task_id, {
+            "task_id": task_id,
+            "article_id": article_id,
+            "status": "failed",
+            "message": f"文章刷新失败: {str(e)}"
+        })
+    finally:
+        if fetcher is not None:
+            try:
+                fetcher.Close()
+            except Exception:
+                pass
+        session.close()
 
 
     
@@ -96,6 +210,48 @@ async def toggle_article_read_status(
                 message=f"更新文章阅读状态失败: {str(e)}"
             )
         )
+
+
+@router.put("/{article_id}/favorite", summary="改变文章收藏状态")
+async def toggle_article_favorite_status(
+    article_id: str,
+    is_favorite: bool = Query(..., description="收藏状态: true为收藏, false为取消收藏"),
+    current_user: dict = Depends(get_current_user_or_ak)
+):
+    session = DB.get_session()
+    try:
+        article = session.query(Article).filter(Article.id == article_id).first()
+        if not article:
+            raise HTTPException(
+                status_code=fast_status.HTTP_404_NOT_FOUND,
+                detail=error_response(
+                    code=40401,
+                    message="文章不存在"
+                )
+            )
+
+        article.is_favorite = 1 if is_favorite else 0
+        session.commit()
+
+        clear_cache_pattern("articles_list")
+        clear_cache_pattern("article_detail")
+        clear_cache_pattern("tag_detail")
+
+        return success_response({
+            "message": "文章已收藏" if is_favorite else "已取消收藏",
+            "is_favorite": is_favorite
+        })
+    except HTTPException as e:
+        raise e
+    except Exception as e:
+        session.rollback()
+        raise HTTPException(
+            status_code=fast_status.HTTP_406_NOT_ACCEPTABLE,
+            detail=error_response(
+                code=50001,
+                message=f"更新文章收藏状态失败: {str(e)}"
+            )
+        )
     
 @router.delete("/clean_duplicate_articles", summary="清理重复文章")
 async def clean_duplicate(
@@ -126,6 +282,7 @@ async def get_articles(
     status: str = Query(None),
     search: str = Query(None),
     mp_id: str = Query(None),
+    only_favorite: bool = Query(False),
     has_content:bool=Query(False),
     current_user: dict = Depends(get_current_user_or_ak)
 ):
@@ -143,6 +300,8 @@ async def get_articles(
             query = query.filter(Article.status != DATA_STATUS.DELETED)
         if mp_id:
             query = query.filter(Article.mp_id == mp_id)
+        if only_favorite:
+            query = query.filter(Article.is_favorite == 1)
         if search:
             query = query.filter(
                format_search_kw(search)
@@ -171,6 +330,7 @@ async def get_articles(
         for article in articles:
             article_dict = article.__dict__
             article_dict["mp_name"] = mp_names.get(article.mp_id, "未知公众号")
+            article_dict["is_favorite"] = int(getattr(article, "is_favorite", 0) or 0)
             article_list.append(article_dict)
         
         from .base import success_response
@@ -188,6 +348,75 @@ async def get_articles(
                 message=f"获取文章列表失败: {str(e)}"
             )
         )
+
+@router.post("/{article_id}/refresh", summary="刷新单篇文章")
+async def refresh_article(
+    article_id: str,
+    current_user: dict = Depends(get_current_user_or_ak)
+):
+    session = DB.get_session()
+    try:
+        article_exists = session.query(Article.id).filter(Article.id == article_id).first()
+        if not article_exists:
+            raise HTTPException(
+                status_code=fast_status.HTTP_404_NOT_FOUND,
+                detail=error_response(
+                    code=40401,
+                    message="文章不存在"
+                )
+            )
+
+        active_task = _get_active_refresh_task(article_id)
+        if active_task:
+            return success_response(active_task, message="该文章已有刷新任务在执行")
+
+        task_id = str(uuid4())
+        task = {
+            "task_id": task_id,
+            "article_id": article_id,
+            "status": "pending",
+            "message": "任务已创建"
+        }
+        _set_refresh_task(task_id, task)
+
+        threading.Thread(
+            target=_run_refresh_article_task,
+            args=(task_id, article_id),
+            daemon=True
+        ).start()
+
+        return success_response(task, message="已开始刷新，请稍后查看")
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=fast_status.HTTP_406_NOT_ACCEPTABLE,
+            detail=error_response(
+                code=50001,
+                message=f"文章刷新失败: {str(e)}"
+            )
+        )
+    finally:
+        session.close()
+
+
+@router.get("/refresh/tasks/{task_id}", summary="查询文章刷新任务状态")
+async def get_refresh_task_status(
+    task_id: str,
+    current_user: dict = Depends(get_current_user_or_ak)
+):
+    with _refresh_tasks_lock:
+        task = _refresh_tasks.get(task_id)
+    if not task:
+        raise HTTPException(
+            status_code=fast_status.HTTP_404_NOT_FOUND,
+            detail=error_response(
+                code=40404,
+                message="刷新任务不存在"
+            )
+        )
+    return success_response(task)
+
 
 @router.get("/{article_id}", summary="获取文章详情")
 async def get_article_detail(

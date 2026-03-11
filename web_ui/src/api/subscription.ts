@@ -39,6 +39,18 @@ export interface MpSearchResult {
   data: MpItem[]
 }
 
+export interface FeaturedArticleTask {
+  task_id: string
+  url: string
+  status: 'pending' | 'running' | 'success' | 'failed'
+  message: string
+  id?: string
+  mp_id?: string
+  mp_name?: string
+  title?: string
+  created?: boolean
+}
+
 export const getSubscriptions = (params?: { page?: number; pageSize?: number }) => {
   const apiParams = {
     offset: (params?.page || 0) * (params?.pageSize || 10),
@@ -58,6 +70,14 @@ export const addSubscription = (data: AddSubscriptionParams) => {
 }
 export const getSubscriptionInfo = (url: string) => {
   return http.post<{code: number, message: string}>(`/wx/mps/by_article?url=${url}`)
+}
+
+export const addFeaturedArticle = (data: { url: string }) => {
+  return http.post<{code: number, data: FeaturedArticleTask}>('/wx/mps/featured/article', data)
+}
+
+export const getFeaturedArticleTaskStatus = (taskId: string) => {
+  return http.get<{code: number, data: FeaturedArticleTask}>(`/wx/mps/featured/article/tasks/${taskId}`)
 }
 
 export const deleteMpApi = (mp_id: string) => {
