@@ -1,7 +1,7 @@
 #!/bin/bash
 plantform="$(uname -m)"
-PLANT_PATH=${PLANT_PATH:-/app/env/}
-plant=$PLANT_PATH_$plantform
+PLANT_PATH=${PLANT_PATH:-/app/env}
+plant="${PLANT_PATH}_${plantform}"
 python3 -m venv $plant
 source $plant/bin/activate
 echo "使用虚拟环境: $plant"
@@ -56,7 +56,7 @@ fi
 
 ln -sf /usr/share/zoneinfo/Asia/Shanghai /etc/localtime
 
-PLAYWRIGHT_BROWSERS_PATH=${PLAYWRIGHT_BROWSERS_PATH:-$PLANT_PATH/driver/_$plantform}
+PLAYWRIGHT_BROWSERS_PATH=${PLAYWRIGHT_BROWSERS_PATH:-${PLANT_PATH}/driver/_${plantform}}
 BROWSER_TYPE=${BROWSER_TYPE:-webkit}
 echo "export PLAYWRIGHT_BROWSERS_PATH=${PLAYWRIGHT_BROWSERS_PATH}
 export TZ=Asia/Shanghai
@@ -72,7 +72,7 @@ source $plant/bin/activate">/etc/profile
 # 检查requirements.txt更新
 if [ -f "requirements.txt" ]; then
     CURRENT_MD5=$(md5sum requirements.txt | cut -d' ' -f1)
-    OLD_MD5_FILE="$PLANT_PATH/requirements.txt.md5"
+    OLD_MD5_FILE="${PLANT_PATH}/requirements.txt.md5"
     
     if [ -f "$OLD_MD5_FILE" ] && [ "$CURRENT_MD5" = "$(cat $OLD_MD5_FILE)" ]; then
         echo "requirements.txt未更新，跳过安装"
