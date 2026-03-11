@@ -66,10 +66,11 @@ if __name__ == '__main__':
     print("启动服务器")
     AutoReload=cfg.get("server.auto_reload",False)
     thread=cfg.get("server.threads",1)
+    reload_dirs = ["apis", "core", "driver", "jobs", "schemas", "tools", "views", "web_ui"]
     uvicorn.run("web:app", host="0.0.0.0", port=int(cfg.get("port",8001)),
             reload=AutoReload,
-            reload_dirs=['core','web_ui'],
-            reload_excludes=['static','web_ui','data'], 
+            reload_dirs=reload_dirs,
+            reload_excludes=['static','data'],
             workers=thread,
             )
     pass
