@@ -25,13 +25,19 @@ logger = logging.getLogger(__name__)
 # ── 飞书通知 ────────────────────────────────────────────────────────────────
 
 def _load_feishu_secret(agent="tron"):
+    """从环境变量或 openclaw.json 读取飞书 App Secret（优先环境变量）"""
     import json, os
-    cfg = json.load(open(os.path.expanduser("~/.openclaw/openclaw.json")))
-    return cfg["channels"]["feishu"]["accounts"][agent]["appSecret"]
+    if os.environ.get("FEISHU_APP_SECRET"):
+        return os.environ["FEISHU_APP_SECRET"]
+    try:
+        cfg = json.load(open(os.path.expanduser("~/.openclaw/openclaw.json")))
+        return cfg["channels"]["feishu"]["accounts"][agent]["appSecret"]
+    except Exception:
+        return ""
 
-FEISHU_APP_ID = "cli_a927325a1f79dbdf"
+FEISHU_APP_ID = os.environ.get("FEISHU_APP_ID", "cli_a927325a1f79dbdf")
 FEISHU_APP_SECRET = _load_feishu_secret("tron")
-FEISHU_CHAT_ID = "oc_0d007efed8a107b8d645a664aa203911"   # 管理通知群
+FEISHU_CHAT_ID = os.environ.get("FEISHU_CHAT_ID", "oc_0d007efed8a107b8d645a664aa203911")
 
 
 def _feishu_token() -> str:
